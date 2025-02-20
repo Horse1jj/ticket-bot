@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/peterhanania/ticket-bot.git"
+    "url": "git+https://github.com/Horse1jj/ticket-bot.git"
   },
   "keywords": [
     "ticket-bot-discord"
@@ -16,11 +16,11 @@
   "author": "Peter Hanania",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/peterhanania/ticket-bot/issues"
+    "url": "https://github.com/Horse1jj/ticket-bot/issues"
   },
-  "homepage": "https://github.com/peterhanania/ticket-bot#readme",
+  "homepage": "https://github.com/Horse1jj/ticket-bot#readme",
   "dependencies": {
-    "discord.js": "^12.5.3",
+    "discord.js": "^14.14.1",
     "moment": "^2.29.1",
     "moment-duration-format": "^2.3.2",
     "mongoose": "^5.12.4"
