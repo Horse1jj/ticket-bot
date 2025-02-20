@@ -20,7 +20,7 @@ module.exports = class extends Command {
     const embed = new MessageEmbed()
     .setColor('GREEN')
     .setTitle(`${config.bot_name || 'Bot'}'s Command List`)
-    .setDescription(`**Please make sure to follow and star the github repo [here](https://github.com/peterhanania/ticket-bot)**`)
+    .setDescription(`**Please make sure to follow the rules`)
 
 
     const categories = message.client.utils.removeDuplicates(message.client.commands.filter(cmd => cmd.category !== 'Owner').map(cmd => cmd.category));
