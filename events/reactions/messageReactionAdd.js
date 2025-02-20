@@ -1,155 +1,153 @@
 const Event = require('../../structures/Event');
-const { MessageReaction, User, MessageEmbed } = require("discord.js");
-const discord = require("discord.js");
-const Discord = require("discord.js");
-const moment = require('moment')
-const config = require('../../config.json')
+const { MessageReaction, User, EmbedBuilder, ChannelType, PermissionsBitField } = require("discord.js");
+const moment = require('moment');
+const config = require('../../config.json');
+
 /**
- *
  * @param {MessageReaction} reaction
  * @param {User} user
  */
-
 module.exports = class extends Event {
-	async run(messageReaction, user) {
-	
-//ignore bot's reactions
-if (this.client.user === user) return;
+  async run(messageReaction, user) {
+    // Ignore bot reactions
+    if (user.bot) return;
 
-const { message, emoji } = messageReaction;
+    const { message, emoji } = messageReaction;
+    const member = message.guild.members.cache.get(user.id);
 
-// fetch the member
-const member = message.guild.members.cache.get(user.id);
+    let id = user.id.toString().substr(0, 4) + user.discriminator;
+    let chann = `ticket-${id}`;
 
-// needed for ticket name
-let id = user.id.toString().substr(0, 4) + user.discriminator;
-let chann = `ticket-${id}`;
+    if (emoji.toString() === config.emoji) {
+      let role = config.support_role_id
+        ? message.guild.roles.cache.get(config.support_role_id)
+        : message.guild.roles.cache.find(r => r.name === "Ticket Support");
 
+      if (!role) {
+        role = await message.guild.roles.create({
+          name: "Ticket Support",
+          permissions: [],
+          reason: 'Ticket Support Role created for Ticket System',
+        });
+      }
 
-if(emoji.toString() === config.emoji){
+      let category = config.category_id
+        ? message.guild.channels.cache.get(config.category_id)
+        : message.guild.channels.cache.find(c => c.name === "tickets" && c.type === ChannelType.GuildCategory);
 
-	let role;
-	if(config.support_role_id){
-		role =  message.guild.roles.cache.get(config.support_role_id);
-	} else role = message.guild.roles.cache.find(r => r.name === "Ticket Support");
+      if (!category) {
+        category = await message.guild.channels.create({
+          name: "tickets",
+          type: ChannelType.GuildCategory,
+          position: 1,
+        });
+      }
 
-	if(!role) {
-		return await message.guild.roles.create({data:{name: "Ticket Support", permissions: 0}, reason: 'Ticket Support Role'});
-	  };
+      let limit = Number(config.ticket_limit) || 1;
 
-	let category;
-	if(config.category_id){
-		category = message.guild.channels.cache.get(config.category_id)
-	} else category = message.guild.channels.cache.find(c => c.name == "tickets" && c.type == "category");
-	
-    if(!category) {
-			return await message.guild.channels.create("tickets", {type: "category", position: 1});
-	};
+      const existingTickets = message.guild.channels.cache.filter(channel => channel.name === chann);
+      if (existingTickets.size >= limit) {
+        return message.channel.send(`Ticket Limit Reached. Limit: ${limit}`).then(msg => {
+          setTimeout(() => msg.delete().catch(() => {}), 5000);
+        });
+      }
 
-    let limit = config.ticket_limit;
+      messageReaction.users.remove(user.id).catch(() => {});
 
-	if(limit && Number(limit)){
-    limit = Number(limit)
-	} else limit = 1
-
-	let array = []
-  
-	// check for ticket limit
-	message.guild.channels.cache.forEach(channel => {
-    if(channel.name == chann) array.push(channel.id)
-	});
-
-
-	if(array.length >= limit){
-		return message.channel.send(`Ticket Limit Reached. Limit: ${limit}`).then((s)=>[
-			s.delete({timeout: 5000}).catch(()=>{})
-		])
-	};
-
-	  message.reactions.cache.find(r => r.emoji.name == emoji.name).users.remove(user.id).catch(()=>{})
-      message.guild.channels.create(chann, { permissionOverwrites:[
-	      {
-            deny: 'VIEW_CHANNEL',
-            id: message.guild.id
+      const channel = await message.guild.channels.create({
+        name: chann,
+        type: ChannelType.GuildText,
+        parent: category.id,
+        topic: `**ID:** ${user.id} | **Tag:** ${user.tag}`,
+        permissionOverwrites: [
+          {
+            id: message.guild.id,
+            deny: [PermissionsBitField.Flags.ViewChannel],
           },
           {
-            allow:  ['VIEW_CHANNEL', 'SEND_MESSAGES', 'ATTACH_FILES', 'READ_MESSAGE_HISTORY', 'ADD_REACTIONS'],
-            id: user.id
+            id: user.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.AttachFiles,
+              PermissionsBitField.Flags.ReadMessageHistory,
+              PermissionsBitField.Flags.AddReactions,
+            ],
           },
           {
-            allow:  ['VIEW_CHANNEL', 'SEND_MESSAGES', 'ATTACH_FILES', 'READ_MESSAGE_HISTORY', 'ADD_REACTIONS'],
-            id: role.id
+            id: role.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.AttachFiles,
+              PermissionsBitField.Flags.ReadMessageHistory,
+              PermissionsBitField.Flags.AddReactions,
+            ],
           },
-		  {
-            allow:  ['VIEW_CHANNEL', 'SEND_MESSAGES', 'ATTACH_FILES', 'READ_MESSAGE_HISTORY', 'ADD_REACTIONS', 'MANAGE_CHANNELS'],
-            id: message.guild.me
+          {
+            id: message.guild.members.me.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.AttachFiles,
+              PermissionsBitField.Flags.ReadMessageHistory,
+              PermissionsBitField.Flags.AddReactions,
+              PermissionsBitField.Flags.ManageChannels,
+            ],
           },
         ],
-        parent: category.id,
-        reason: `Ticket Module`,
-        topic: `**ID:** ${user.id} | **Tag:** ${user.tag}`
-      }).then(async(channel)=>{
-        
+        reason: `Ticket created by ${user.tag}`,
+      });
 
+      const openEmbed = new EmbedBuilder()
+        .setColor('Green')
+        .setDescription(`Welcome to your ticket ${user}!\n\nPlease describe your issue below.`);
 
-        const openEmbed = new discord.MessageEmbed()
-		.setColor(message.client.color.green)
-		.setDescription(`Welcome to your ticket ${user}!\n\nPlease Explain Below your problem.`)
+      const closeEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription(`React with 🗑️ to close this ticket.`);
 
-		const closeEmbed = new discord.MessageEmbed()
-		.setColor(message.client.color.red)
-		.setDescription(`Please react with 🗑️ to close the ticket.`)
+      await channel.send({ embeds: [openEmbed] });
+      const closeMsg = await channel.send({ embeds: [closeEmbed] });
+      await closeMsg.react('🗑️');
 
+      const logEmbed = new EmbedBuilder()
+        .setColor('Green')
+        .setTitle('Ticket Created')
+        .setTimestamp()
+        .addFields([
+          { name: 'User', value: `${user}`, inline: true },
+          { name: 'Channel', value: `${channel.name}`, inline: true },
+          { name: 'Date', value: moment(new Date()).format("dddd, MMMM Do YYYY"), inline: true },
+        ]);
 
-        channel.send(openEmbed);
-		channel.send(closeEmbed).then((pog)=>{
-			pog.react('🗑️')
-	  })
+      if (config.log_channel_id) {
+        const logChannel = message.guild.channels.cache.get(config.log_channel_id);
+        if (logChannel) {
+          logChannel.send({ embeds: [logEmbed] });
+        }
+      }
+    } else if (emoji.toString() === '🗑️') {
+      if (!message.channel.name.startsWith('ticket-')) return;
 
-		const embedLog = new discord.MessageEmbed()
-		.setColor(message.client.color.green)
-		.setTitle("Ticket Created")
-		.setTimestamp()
-		.addField("Information" , `**User:** ${user}\n**Ticket Channel: **${channel.name}\n**Date:** ${moment(new Date()).format("dddd, MMMM Do YYYY")} `)
-		
-        let logChannel; 
-		if(config.log_channel_id){
-			logChannel = await message.guild.channels.cache.get(config.log_channel_id)
+      const closeEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setTitle('Ticket Closed')
+        .setTimestamp()
+        .addFields([
+          { name: 'User', value: `${user}`, inline: true },
+          { name: 'Channel', value: `${message.channel.name}`, inline: true },
+          { name: 'Date', value: moment(new Date()).format("dddd, MMMM Do YYYY"), inline: true },
+        ]);
 
-			if(logChannel){
-				logChannel.send(embedLog)
-			}
-		}
-	  })
+      if (config.log_channel_id) {
+        const logChannel = message.guild.channels.cache.get(config.log_channel_id);
+        if (logChannel) {
+          logChannel.send({ embeds: [closeEmbed] });
+        }
+      }
 
-      
-
-   
-
-
-
-} else if(emoji.toString() === "🗑️"){
-    
-	const ticketClose = new discord.MessageEmbed()
-	.setColor(message.client.color.red)
-	.setTitle("Ticket Closed")
-	.setTimestamp()
-	.addField("Information" , `**User:** ${user}\n**Ticket Channel: **${message.channel.name}\n**Date:** ${moment(new Date()).format("dddd, MMMM Do YYYY")} `)
-	
-  
-	let logChannel; 
-	if(config.log_channel_id){
-		logChannel = await message.guild.channels.cache.get(config.log_channel_id)
-
-		if(logChannel){
-			logChannel.send(ticketClose)
-		}
-	};
-
-	message.channel.delete();
-
-}
-
- 
- }
-}
+      await message.channel.delete();
+    }
+  }
+};
