@@ -3,4 +3,13 @@ hi
 uh clone the respitory 
 
 ```
-git clone github.com/Horse1jj/
+https://github.com/Horse1jj/ticket-bot
+``` 
+
+run the following commands
+
+```
+cd ticket-bot
+npm i 
+node .
+```
