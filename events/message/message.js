@@ -1,8 +1,6 @@
 const Event = require('../../structures/Event');
-const { Permissions, Collection } = require("discord.js");
-const discord = require("discord.js");
-const config = require('./../../config.json');
-const { MessageEmbed } = require('discord.js');
+const { Permissions, Collection, MessageEmbed } = require('discord.js');
+const config = require('../../config.json');
 const permissions = require('../../permissions.json');
 const moment = require('moment');
 require("moment-duration-format");
@@ -28,155 +26,124 @@ module.exports = class extends Event {
 
   async run(message) {
     try {
-     
-
-      const mentionRegex = RegExp(`^<@!?${this.client.user.id}>$`);
-      const mentionRegexPrefix = RegExp(`^<@!?${this.client.user.id}>`);
-    
       if (!message.guild || message.author.bot) return;
 
+      const mentionRegex = new RegExp(`^<@!?${this.client.user.id}>$`);
+      const mentionRegexPrefix = new RegExp(`^<@!?${this.client.user.id}>`);
       
-     if (message.content.match(mentionRegex)) {
-
-       message.channel.send(`Hello there! My prefix for this server is ${config.prefix}`).then((s)=>{
-         s.delete({ timeout: 10000 })
-       }).catch(()=>{})
-
+      // Respond with prefix if bot is mentioned
+      if (message.content.match(mentionRegex)) {
+        return message.channel.send(`Hello there! My prefix for this server is **${config.prefix}**.`)
+          .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
       }
 
-      let mainPrefix = config.prefix;
-
-      const prefix = message.content.match(mentionRegexPrefix) ? 
-        message.content.match(mentionRegexPrefix)[0] : mainPrefix 
-
-
-      
-      moment.suppressDeprecationWarnings = true;
-
-
-        
-
+      // Determine the prefix
+      const prefix = message.content.match(mentionRegexPrefix) ? mentionRegexPrefix[0] : config.prefix;
       if (!message.content.startsWith(prefix)) return;
-      
-      // eslint-disable-next-line no-unused-vars  
+
+      // Extract command and arguments
       const [cmd, ...args] = message.content.slice(prefix.length).trim().split(/ +/g);
-      const command = this.client.commands.get(cmd.toLowerCase()) || this.client.commands.get(this.client.aliases.get(cmd.toLowerCase()));
+      const command = this.client.commands.get(cmd.toLowerCase()) || 
+                      this.client.commands.get(this.client.aliases.get(cmd.toLowerCase()));
 
+      if (!command) return;
 
-
-
-  
-
-      
-
-
-      if (command) {
-       
-
-     
-   
-
-
-        const rateLimit = this.ratelimit(message, cmd);
-
-        if (!message.channel.permissionsFor(message.guild.me).has('SEND_MESSAGES')) return;
-
-    
-  
-        if (typeof rateLimit === "string") return message.channel.send(` ${message.client.emoji.fail} Please wait **${rateLimit}** before running the **${cmd}** command again - ${message.author}`);
-  
-
-        if (command.botPermission) {
-
-          const missingPermissions =
-      message.channel.permissionsFor(message.guild.me).missing(command.botPermission).map(p => permissions[p]);
-
-          if (missingPermissions.length !== 0) {
-       const embed = new MessageEmbed()
-        .setAuthor(`${this.client.user.tag}`, message.client.user.displayAvatarURL({ dynamic: true }))
-        .setTitle(`${message.client.emoji.fail} Missing Bot Permissions`)
-        .setDescription(`Command Name: **${command.name}**\nRequired Permission: **${missingPermissions.map(p => `${p}`).join(' - ')}**`)
-        .setTimestamp()
-        .setFooter('https://pogy.xyz')
-        .setColor(message.guild.me.displayHexColor);
-      return message.channel.send(embed).catch(()=>{})
-          }
-        }
-
-   
-      
-
-  
-        if (command.userPermission) {
-             const missingPermissions =
-        message.channel.permissionsFor(message.author).missing(command.userPermission).map(p => permissions[p]);
-      if (missingPermissions.length !== 0) {
-        const embed = new MessageEmbed()
-          .setAuthor(`${message.author.tag}`, message.author.displayAvatarURL({ dynamic: true }))
-          .setTitle(`${message.client.emoji.fail} Missing User Permissions`)
-          .setDescription(`Command Name: **${command.name}**\nRequired Permission: **${missingPermissions.map(p => `${p}`).join('\n')}**`)
-          .setTimestamp()
-          .setFooter('https://pogy.xyz')
-          .setColor(message.guild.me.displayHexColor);
-       return message.channel.send(embed).catch(()=>{})
+      // Apply rate limiting
+      const rateLimit = this.checkRateLimit(message, cmd);
+      if (typeof rateLimit === "string") {
+        return message.channel.send(`⏳ Please wait **${rateLimit}** before using \`${cmd}\` again.`);
       }
 
-        }
-       
+      // Permission checks
+      if (!this.hasBotPermissions(message, command)) return;
+      if (!this.hasUserPermissions(message, command)) return;
 
-
-        if (command.ownerOnly) {
-          if (!this.client.config.developers.includes(message.author.id)) return
-        }
-
-        if (command.disabled) return message.channel.send(`The owner has disabled the following command for now.`)
-    
-
-  
-        
-        await this.runCommand(message, cmd, args)
-
-        .catch(error => {
-           console.log(error)
-     return message.channel.send(`An Error has occured, please let the developer know.`)
-        })
+      // Owner-only command check
+      if (command.ownerOnly && !config.developers.includes(message.author.id)) {
+        return message.channel.send("🚫 This command is restricted to bot owners.");
       }
-    } catch(error) {
-      console.log(error)
-     return message.channel.send(`An Error has occured, please let the developer know.`)
+
+      // Execute the command
+      await command.run(message, args);
+    } catch (error) {
+      console.error(error);
+      message.channel.send("❌ An unexpected error occurred. Please contact the developer.");
     }
-  } 
+  }
 
-    async runCommand(message, cmd, args) {
+  /**
+   * Checks if the user is rate-limited.
+   */
+  checkRateLimit(message, cmd) {
+    try {
+      const command = this.client.commands.get(cmd.toLowerCase()) || 
+                      this.client.commands.get(this.client.aliases.get(cmd.toLowerCase()));
+      if (message.author.permLevel > 4) return false;
 
-        if (!message.channel.permissionsFor(message.guild.me) || !message.channel.permissionsFor(message.guild.me).has('EMBED_LINKS'))
-          return message.channel.send(`${message.client.emoji.fail} Missing bot Permissions - **Embeds Links**`)
+      const cooldown = command.cooldown * 1000;
+      const userLimits = this.ratelimits.get(message.author.id) || {};
 
-        const command = this.client.commands.get(cmd.toLowerCase()) || this.client.commands.get(this.client.aliases.get(cmd.toLowerCase()));
-
-      
-        await command.run(message, args)
-    }
-
-    ratelimit(message, cmd) {
-      try {
-        const command = this.client.commands.get(cmd.toLowerCase()) || this.client.commands.get(this.client.aliases.get(cmd.toLowerCase()));
-        if (message.author.permLevel > 4) return false;
-    
-        const cooldown = command.cooldown * 1000
-        const ratelimits = this.ratelimits.get(message.author.id) || {}; // get the ENMAP first.
-        if (!ratelimits[command.name]) ratelimits[command.name] = Date.now() - cooldown; // see if the command has been run before if not, add the ratelimit
-        const difference = Date.now() - ratelimits[command.name]; // easier to see the difference
-        if (difference < cooldown) { // check the if the duration the command was run, is more than the cooldown
-          return moment.duration(cooldown - difference).format("D [days], H [hours], m [minutes], s [seconds]", 1); // returns a string to send to a channel
-        } else {
-          ratelimits[command.name] = Date.now(); // set the key to now, to mark the start of the cooldown
-          this.ratelimits.set(message.author.id, ratelimits); // set it
-          return true;
-        }
-      } catch(e) {
-        console.log(e)
-        message.channel.send(`An Error has occured, please let the developer know.`)
+      if (!userLimits[command.name]) {
+        userLimits[command.name] = Date.now() - cooldown;
       }
+
+      const timeDiff = Date.now() - userLimits[command.name];
+      if (timeDiff < cooldown) {
+        return moment.duration(cooldown - timeDiff).format("H[h] m[m] s[s]", 1);
+      }
+
+      userLimits[command.name] = Date.now();
+      this.ratelimits.set(message.author.id, userLimits);
+      return false;
+    } catch (error) {
+      console.error("Rate limit error:", error);
+      return false;
     }
-}
+  }
+
+  /**
+   * Checks if the bot has necessary permissions for the command.
+   */
+  hasBotPermissions(message, command) {
+    if (!command.botPermission) return true;
+
+    const missing = message.channel.permissionsFor(message.guild.me)
+      .missing(command.botPermission)
+      .map(p => permissions[p]);
+
+    if (missing.length) {
+      const embed = new MessageEmbed()
+        .setTitle("🚨 Missing Bot Permissions")
+        .setDescription(`Command: \`${command.name}\`\nPermissions Required: **${missing.join(', ')}**`)
+        .setColor("RED");
+
+      message.channel.send({ embeds: [embed] });
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Checks if the user has necessary permissions for the command.
+   */
+  hasUserPermissions(message, command) {
+    if (!command.userPermission) return true;
+
+    const missing = message.channel.permissionsFor(message.author)
+      .missing(command.userPermission)
+      .map(p => permissions[p]);
+
+    if (missing.length) {
+      const embed = new MessageEmbed()
+        .setTitle("🚨 Missing User Permissions")
+        .setDescription(`Command: \`${command.name}\`\nPermissions Required: **${missing.join(', ')}**`)
+        .setColor("ORANGE");
+
+      message.channel.send({ embeds: [embed] });
+      return false;
+    }
+
+    return true;
+  }
+};
