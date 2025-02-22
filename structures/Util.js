@@ -80,4 +80,5 @@ module.exports = class Util {
     }
 
     console.log(`Events loaded: ${success}, Failed: ${failed}`);
-}
+  }
+}; // <-- Closing bracket was missing
