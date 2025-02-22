@@ -1,44 +1,39 @@
 const Command = require('../../structures/Command');
+const { inspect } = require('util');
 
-module.exports = class extends Command {
-    constructor(...args) {
-      super(...args, {
-        name: 'eval',
-        aliases: [ 'boteval' ],
-        description: `Eval`,
-        category: 'Owner',
-        ownerOnly: true
-      });
+module.exports = class EvalCommand extends Command {
+  constructor(...args) {
+    super(...args, {
+      name: 'eval',
+      aliases: ['boteval'],
+      description: `Evaluates JavaScript code.`,
+      category: 'Owner',
+      ownerOnly: true,
+    });
+  }
+
+  async run(message, args) {
+    const input = args.join(' ');
+    if (!input) return message.channel.send(`❌ What do I evaluate?`);
+
+    // Security check: Block access to sensitive variables
+    if (/token|process\.env/gi.test(input)) {
+      return message.channel.send(`❌ Access denied.`);
     }
 
-    async run(message, args) {
+    try {
+      let output = eval(input);
 
-        const input = args.join(' ');
-        if (!input) return message.channel.send(`What do I evaluate?`)
-   
-    
-        let embed =  ``;
-    
-          try {
-            let output = eval(input);
-            if (typeof output !== 'string') output = require('util').inspect(output, { depth: 0 });
-            
-             embed = `\`\`\`js\n${output.length > 1024 ? 'Too large to display.' : output}\`\`\``
-    
-            
-              
-          } catch(err) {
-            embed = `\`\`\`js\n${err.length > 1024 ? 'Too large to display.' : err}\`\`\``
-          }
-          
-   
-          if(!input.toLowerCase().includes('token')) {
-            message.channel.send(embed);
-          } else {
-              //Block token
-              message.channel.send(`noob.`)
-          }
-       
-    
-      }
+      // If the output is a promise, await it
+      if (output instanceof Promise) output = await output;
+      
+      // Format output
+      output = inspect(output, { depth: 1 });
+      if (output.length > 1024) output = '⚠️ Output too large to display.';
+
+      message.channel.send(`\`\`\`js\n${output}\`\`\``);
+    } catch (err) {
+      message.channel.send(`\`\`\`js\nError: ${err.message}\`\`\``);
+    }
+  }
 };
